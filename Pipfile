@@ -8,7 +8,6 @@ pyqt6 = "*"
 requests = "*"
 opencv-python = "*"
 numpy = "*"
-pyturbojpeg = {editable = true, git = "https://github.com/lilohuang/PyTurboJPEG.git"}
 
 [dev-packages]
 

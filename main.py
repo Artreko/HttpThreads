@@ -1,41 +1,26 @@
-from urllib import request
 import locale
 import sys
-from turbojpeg import TurboJPEG, TJPF_GRAY, TJSAMP_GRAY, TJFLAG_PROGRESSIVE, TJFLAG_FASTUPSAMPLE, TJFLAG_FASTDCT
+import os
 import numpy as np
+from typing import Generator, Iterable
 import cv2
 import requests
-from PyQt6.QtWidgets import QWidget, QApplication, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton
-from PyQt6 import QtGui
+from PyQt6.QtWidgets import QWidget, QApplication, QLabel,\
+    QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QListWidget
 from PyQt6.QtGui import QPixmap, QColor, QImage
 from PyQt6.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
-# r = requests.get("http://212.26.235.210:80/axis-cgi/jpg/image.cgi?resolution=640x480")
-# with open('file.jpg', 'wb') as f:
-#     f.writelines(r)
 
-class ImgThread(QThread):
-
-    def __init__(self, ip):
-        super().__init__()
-        self.ip = ip
-        self._run_flag = True
+PATH_WITH_PLUGINS = 'plugins'
 
 
-    def run(self):
-        ...
-
-    def stop(self):
-        ...
-
-    @pyqtSlot(str)
-    def set_ip(self, ip):
-        self.ip = ip
-
-class TakeImgCV2Thread(ImgThread):
+class TakeImgCV2Thread(QThread):
     change_pixmap_signal = pyqtSignal(QImage)
 
-    def __init__(self, ip: QLineEdit):
-        super().__init__(ip)
+    def __init__(self, ip, func):
+        super().__init__()
+        self.ip = ip
+        self.func = func
+        self._run_flag = True
         self.cap = None
 
     def run(self):
@@ -44,30 +29,16 @@ class TakeImgCV2Thread(ImgThread):
             ret, frame = self.cap.read()
             if ret:
                 img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = cv2.resize(img, (640, 480))
+                if self.func:
+                    self.func(img)
                 converted_img = QImage(img, img.shape[1], img.shape[0], QImage.Format.Format_RGB888)
                 res_img = converted_img.scaled(640, 480, Qt.AspectRatioMode.KeepAspectRatio)
                 self.change_pixmap_signal.emit(res_img)
 
     def stop(self):
         """Sets run flag to False and waits for thread to finish"""
-        self._run_flag = False
         self.cap.release()
-        self.wait()
-
-
-class TakeImgThread(ImgThread):
-    change_pixmap_signal = pyqtSignal(bytes)
-
-    def __init__(self, ip):
-        super().__init__(ip)
-
-    def run(self):
-        while self._run_flag:
-            response = requests.get(f"http://{self.ip}/axis-cgi/jpg/image.cgi?resolution=640x480")
-            self.change_pixmap_signal.emit(response.content)
-
-    def stop(self):
-        """Sets run flag to False and waits for thread to finish"""
         self._run_flag = False
         self.wait()
 
@@ -81,14 +52,17 @@ class App(QWidget):
         self.img_width = 640
         self.img_height = 480
 
-        self.image_label = QLabel(self)
-        self.image_label.resize(self.img_width, self.img_height)
-        self.image_label.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
+        self.image_label1 = QLabel(self)
+        self.image_label1.resize(self.img_width, self.img_height)
+        self.image_label1.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
         self.text_label1 = QLabel("Cam")
         self.ip_1 = QLineEdit()
-        self.ip_1.setText('212.26.235.210')
+        self.ip_1.setText('85.158.74.11')
         self.change_ip_b1 = QPushButton('Изменить')
-        # self.change_ip_b1.setDisabled(True)
+        self.change_ip_b1.setDisabled(True)
+        self.list_w1 = QListWidget()
+        self.list_w1.addItem('Без обработки')
+        self.list_w1.setCurrentRow(0)
         self.start_b1 = QPushButton('Старт')
         self.stop_b1 = QPushButton('Стоп')
         self.stop_b1.setDisabled(True)
@@ -96,68 +70,135 @@ class App(QWidget):
         self.start_b1.clicked.connect(self.start_b1_clicked)
         self.stop_b1.clicked.connect(self.stop_b1_clicked)
 
-        self.image_cv2_label = QLabel(self)
-        self.image_cv2_label.resize(self.img_width, self.img_height)
-        self.image_label.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
+        self.image_label2 = QLabel(self)
+        self.image_label2.resize(self.img_width, self.img_height)
+        self.image_label2.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
         self.text_label2 = QLabel("Cam cv2")
         self.ip_2 = QLineEdit()
-        self.ip_2.setText('212.26.235.210')
-        # response = request.urlopen("http://212.26.235.210:80/axis-cgi/jpg/image.cgi?resolution=640x480").read()
-        # response = requests.get("http://212.26.235.210:80/axis-cgi/jpg/image.cgi?resolution=640x480")
+        self.ip_2.setText('85.158.74.11')
+        self.list_w2 = QListWidget()
+        self.list_w2.addItem('Без обработки')
+        self.list_w2.setCurrentRow(0)
+        self.change_ip_b2 = QPushButton('Изменить')
+        self.change_ip_b2.setDisabled(True)
+        self.start_b2 = QPushButton('Старт')
+        self.stop_b2 = QPushButton('Стоп')
+        self.stop_b2.setDisabled(True)
+        self.change_ip_b2.clicked.connect(self.change_ip_b2_clicked)
+        self.start_b2.clicked.connect(self.start_b2_clicked)
+        self.stop_b2.clicked.connect(self.stop_b2_clicked)
+
+        self.REQUIRED_FIELDS = ['NAME', 'VERSION', 'AUTHOR', 'CAPTION', 'edit_img']
+        files = self.get_py_files()
+        modules = self.get_modules(files)
+        self.funcs_list = [None]
+        self.plugins = list(self.check_plugins(modules))
+        for plugin in self.plugins:
+            self.list_w1.addItem(plugin.CAPTION)
+            self.list_w2.addItem(plugin.CAPTION)
+            self.funcs_list.append(plugin.edit_img)
 
         hbox = QHBoxLayout()
         vbox1 = QVBoxLayout()
         vbox1.addWidget(self.text_label1)
         vbox1.addWidget(self.ip_1)
+        vbox1.addWidget(self.list_w1)
         vbox1.addWidget(self.change_ip_b1)
-        vbox1.addWidget(self.image_label)
+        vbox1.addWidget(self.image_label1)
         vbox1.addWidget(self.start_b1)
         vbox1.addWidget(self.stop_b1)
 
         vbox2 = QVBoxLayout()
         vbox2.addWidget(self.text_label2)
         vbox2.addWidget(self.ip_2)
-        vbox2.addWidget(self.image_cv2_label)
-
+        vbox2.addWidget(self.list_w2)
+        vbox2.addWidget(self.change_ip_b2)
+        vbox2.addWidget(self.image_label2)
+        vbox2.addWidget(self.start_b2)
+        vbox2.addWidget(self.stop_b2)
+        
         hbox.addLayout(vbox1)
         hbox.addLayout(vbox2)
 
         self.setLayout(hbox)
-
-        self.thread = TakeImgThread(self.ip_1.text())
-        self.thread.change_pixmap_signal.connect(self.update_img)
-        self.change_ip_signal1.connect(self.thread.set_ip)
-
-        self.thread_cv = TakeImgCV2Thread(self.ip_2.text())
-        self.thread_cv.change_pixmap_signal.connect(self.update_img_cv2)
-        self.thread_cv.start()
-
-    @pyqtSlot(bytes)
-    def update_img(self, img):
-        px_map = QPixmap()
-        px_map.loadFromData(img)
-        self.image_label.setPixmap(px_map)
+        self.thread = None
+        self.thread_cv2 = None
 
     @pyqtSlot(QImage)
-    def update_img_cv2(self, cv_img):
+    def update_img1(self, img):
+        px_map = QPixmap.fromImage(img)
+        self.image_label1.setPixmap(px_map)
+
+    @pyqtSlot(QImage)
+    def update_img2(self, cv_img):
         px_map = QPixmap.fromImage(cv_img)
-        self.image_cv2_label.setPixmap(px_map)
+        self.image_label2.setPixmap(px_map)
 
     def start_b1_clicked(self):
+        self.thread = TakeImgCV2Thread(self.ip_1.text(),
+                                       self.funcs_list[self.list_w1.currentRow()])
+        self.thread.change_pixmap_signal.connect(self.update_img1)
         self.thread.start()
         self.stop_b1.setEnabled(True)
         self.change_ip_b1.setEnabled(True)
         self.start_b1.setDisabled(True)
 
     def stop_b1_clicked(self):
-        self.thread.exit(0)
+        self.thread.terminate()
         self.start_b1.setEnabled(True)
         self.stop_b1.setDisabled(True)
 
     def change_ip_b1_clicked(self):
-        # self.stop_b1_clicked()
-        self.change_ip_signal1.emit(self.ip_1.text())
+        self.stop_b1_clicked()
         self.start_b1_clicked()
+
+    def start_b2_clicked(self):
+        self.thread_cv2 = TakeImgCV2Thread(self.ip_2.text(),
+                                            self.funcs_list[self.list_w2.currentRow()])
+        self.thread_cv2.change_pixmap_signal.connect(self.update_img2)
+        self.thread_cv2.start()
+        self.stop_b2.setEnabled(True)
+        self.change_ip_b2.setEnabled(True)
+        self.start_b2.setDisabled(True)
+
+    def stop_b2_clicked(self):
+        self.thread_cv2.terminate()
+        self.start_b2.setEnabled(True)
+        self.stop_b2.setDisabled(True)
+
+    def change_ip_b2_clicked(self):
+        self.stop_b2_clicked()
+        self.start_b2_clicked()
+
+    def get_py_files(self) -> Generator[str, None, None]:
+        """Получаем все файлы из папки"""
+        for file in os.listdir(PATH_WITH_PLUGINS):
+            # Отбрасываем все файлы, которые заканчиваются не на .py
+            if file[-3:] != '.py':
+                continue
+            yield file[:-3]
+
+    def get_modules(self, files: Iterable[str]) -> Generator[object, None, None]:
+        """Получаем модули из файлов"""
+        for file in files:
+            module = __import__(f'{PATH_WITH_PLUGINS}.{file}')
+            module = getattr(module, file)
+            # Если в модуле нет класса Plugin, пропускаем
+            if not hasattr(module, 'Plugin'):
+                print(file, 'Модуль не имеет класса Plugin')
+                continue
+            yield getattr(module, 'Plugin')()
+
+    def check_plugins(self, modules: Iterable[object]):
+        """Проверяем, чтоб в модуле были нужные переменные и функции"""
+        for module in modules:
+            print(dir(module))
+
+            # Если хоть какого-то эллемента из массива REQUIRED_FIELDS нет - пропускаем
+            if not all([hasattr(module, field) for field in self.REQUIRED_FIELDS]):
+                print(module, 'Модуль не имеет нужных полей')
+                continue
+            yield module
 
 
 if __name__ == '__main__':
