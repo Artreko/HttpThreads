@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "6bc978cc5ff3299f855f270315a1d9fb0f674165d98e0b73cac336cdef011769"
+            "sha256": "09336bb6775c09a735114c4273b17b327ff236c5830a39804693a98947d7094d"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -201,11 +201,6 @@
             ],
             "markers": "python_version >= '3.7'",
             "version": "==13.4.1"
-        },
-        "pyturbojpeg": {
-            "editable": true,
-            "git": "https://github.com/lilohuang/PyTurboJPEG.git",
-            "ref": "3ad63af40e092bb8e704a4e3f2e913ba13a48731"
         },
         "requests": {
             "hashes": [
