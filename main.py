@@ -1,10 +1,8 @@
 import locale
 import sys
 import os
-import numpy as np
 from typing import Generator, Iterable
 import cv2
-import requests
 from PyQt6.QtWidgets import QWidget, QApplication, QLabel,\
     QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QListWidget
 from PyQt6.QtGui import QPixmap, QColor, QImage
@@ -55,7 +53,7 @@ class App(QWidget):
         self.image_label1 = QLabel(self)
         self.image_label1.resize(self.img_width, self.img_height)
         self.image_label1.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
-        self.text_label1 = QLabel("Cam")
+        self.text_label1 = QLabel("Камера 1")
         self.ip_1 = QLineEdit()
         self.ip_1.setText('85.158.74.11')
         self.change_ip_b1 = QPushButton('Изменить')
@@ -73,7 +71,7 @@ class App(QWidget):
         self.image_label2 = QLabel(self)
         self.image_label2.resize(self.img_width, self.img_height)
         self.image_label2.setPixmap(QPixmap.fromImage(QImage('noimg.jpg')))
-        self.text_label2 = QLabel("Cam cv2")
+        self.text_label2 = QLabel("Камера 2")
         self.ip_2 = QLineEdit()
         self.ip_2.setText('85.158.74.11')
         self.list_w2 = QListWidget()
@@ -123,6 +121,16 @@ class App(QWidget):
         self.setLayout(hbox)
         self.thread = None
         self.thread_cv2 = None
+
+    def closeEvent(self, event):  # Вызывается при закрытии окна
+        self.hide()  # Скрываем окно
+        if self.thread:
+            self.thread.terminate()
+            self.thread.wait(5000)
+        if self.thread_cv2:
+            self.thread_cv2.terminate()
+            self.thread_cv2.wait(5000)
+        event.accept()  # Закрываем окно
 
     @pyqtSlot(QImage)
     def update_img1(self, img):
