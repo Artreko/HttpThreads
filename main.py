@@ -193,8 +193,8 @@ class App(QWidget):
 
         self.ip_search_b = QPushButton('Начать поиск')
         self.ips_dict = {}
-        self.queue = Queue(3)
-        self.stats_queue = Queue(3)
+        self.out_queue = Queue(3)
+        self.in_queue = Queue(3)
         self.ip_search_b.clicked.connect(self.start_search_b_clicked)
         main_box.addWidget(self.ip_search_b)
 
@@ -212,7 +212,7 @@ class App(QWidget):
          """
         self.host = 'localhost'
         self.user_name = 'root'
-        self.password = 'ArtemKo21'
+        self.password = ''
         self.db_name = 'threads'
         self.db_connection = self.create_db_connection()
         self.execute_query('DROP TABLE ip_search_stats')
@@ -269,29 +269,34 @@ class App(QWidget):
         # print(ranges)
         return ranges
 
-    def search_ips(self, p_range, i):
+    def search_ips(self, i):
         time_start = time()
-        start, stop = p_range
-        for page in range(start, stop):
-            self.queue.put(hparser.parse_ips_from_page(self.url, page))
+        pages_cnt = 0
+        while self.in_queue.qsize() > 0:
+            page = self.in_queue.get()
+            self.out_queue.put(hparser.parse_ips_from_page(self.url, page))
+            self.in_queue.task_done()
+            pages_cnt += 1
         proc_time = time() - time_start
         # print(proc_time)
-        self.queue.task_done()
+        self.out_queue.task_done()
         # self.stats_queue.put((i, time() - time_start, stop - start))
         # self.stats_queue.task_done()
-        Thread(target=self.execute_thread_query, args=(i, stop - start, proc_time), daemon=False).start()
+        Thread(target=self.execute_thread_query, args=(i, pages_cnt, proc_time), daemon=False).start()
 
     def start_search_b_clicked(self):
+        self.execute_query('DROP TABLE ip_search_stats')
+        self.execute_query(self.create_table)
         threads = self.th_spinbox.value()
-        ranges = self.get_ranges(self.start_spin.value(), self.end_spin.value(), threads)
-        print(ranges)
-        self.queue = Queue(threads)
+        for i in range(self.start_spin.value(), self.end_spin.value() + 1):
+            self.in_queue.put(i)
+        self.out_queue = Queue(threads)
         # self.stats_queue = Queue(threads)
         for i in range(self.th_spinbox.value()):
-            Thread(target=self.search_ips, args=(ranges[i], i), daemon=True).start()
-        self.queue.join()
+            Thread(target=self.search_ips, args=(i, ), daemon=True).start()
+        self.out_queue.join()
         for _ in range(self.end_spin.value() - self.start_spin.value() + 1):
-            ips = self.queue.get()
+            ips = self.out_queue.get()
             self.ips_dict.update(ips)
         # for _ in range(threads):
         #     print(self.stats_queue.get())
