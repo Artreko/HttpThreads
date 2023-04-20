@@ -215,7 +215,7 @@ class App(QWidget):
         self.password = ''
         self.db_name = 'threads'
         self.db_connection = self.create_db_connection()
-        self.execute_query('DROP TABLE ip_search_stats')
+        self.execute_query('DROP TABLE IF EXISTS ip_search_stats')
         self.execute_query(self.create_table)
 
     def create_db_connection(self):
@@ -285,7 +285,7 @@ class App(QWidget):
         Thread(target=self.execute_thread_query, args=(i, pages_cnt, proc_time), daemon=False).start()
 
     def start_search_b_clicked(self):
-        self.execute_query('DROP TABLE ip_search_stats')
+        self.execute_query('DROP TABLE IF EXISTS ip_search_stats')
         self.execute_query(self.create_table)
         threads = self.th_spinbox.value()
         for i in range(self.start_spin.value(), self.end_spin.value() + 1):
