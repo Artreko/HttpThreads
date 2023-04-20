@@ -8,6 +8,8 @@ pyqt6 = "*"
 requests = "*"
 opencv-python = "*"
 numpy = "*"
+bs4 = "*"
+mysql-connector-python = "*"
 
 [dev-packages]
 
